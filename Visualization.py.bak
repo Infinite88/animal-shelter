@@ -1,0 +1,254 @@
+
+# coding: utf-8
+
+# In[278]:
+
+import pandas as pd
+import seaborn as sns
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+import re
+
+get_ipython().magic('matplotlib inline')
+
+import warnings
+warnings.filterwarnings('ignore')
+
+
+# In[279]:
+
+# function used to import data into dataframe and get info
+def animalDF(file):
+    df = pd.read_csv(file)
+    print(df.info())
+    return df
+
+
+# In[280]:
+
+animals = animalDF('files/train.csv')
+test = animalDF('files/test.csv')
+
+
+# In[281]:
+
+# Determining what features had missing data
+animals.isnull().sum()
+
+
+# In[282]:
+
+print(animals['Name'].value_counts())
+print(animals['OutcomeSubtype'].value_counts())
+print(animals['SexuponOutcome'].value_counts())
+print(animals['AgeuponOutcome'].value_counts())
+
+
+# In[283]:
+
+print(animals['Color'].nunique())
+print(animals['Name'].nunique())
+print(animals['AgeuponOutcome'].nunique())
+print(animals['AnimalType'].nunique())
+print(animals['SexuponOutcome'].nunique())
+
+
+# In[284]:
+
+animals.head()
+
+
+# In[285]:
+
+# Splitting SexuponOutcome feature into sex and neutered features.
+def sexSplit(data):
+    sex = str(data)
+    if 'Male' in sex:
+        return 'Male'
+    else:
+        return 'Female'
+    
+def intactSplit(data):
+    intact = str(data)
+    if 'Neutered' in intact or 'Spayed' in intact:
+        return 'Neutered'
+    elif 'Intact' in intact:
+        return 'Intact'
+    else:
+        return "Unknown"
+    
+animals['Sex'] = animals.SexuponOutcome.apply(sexSplit)
+animals['Neutered'] = animals.SexuponOutcome.apply(intactSplit)
+test['Sex'] = test.SexuponOutcome.apply(sexSplit)
+test['Neutered'] = test.SexuponOutcome.apply(intactSplit)
+
+
+# In[286]:
+
+# Dropping old feature as well as Outcomesubtype, so that each dataset matches
+animals = animals.drop(['SexuponOutcome', 'OutcomeSubtype'], axis=1)
+test = test.drop('SexuponOutcome', axis=1)
+
+
+# In[287]:
+
+# Change Breed values to either Hybrid or Purebred
+def get_mix(data):
+    mix = str(data)
+    if 'Mix' in mix or '/' in mix:
+        return 'Hybrid'
+    else:
+        return 'Purebred'
+animals['Breed'] = animals.Breed.apply(get_mix)
+test['Breed'] = test.Breed.apply(get_mix)
+
+
+# In[288]:
+
+animals['AgeuponOutcome'] = animals['AgeuponOutcome'].fillna('1 year')
+test['AgeuponOutcome'] = test['AgeuponOutcome'].fillna('1 year')
+
+
+# In[289]:
+
+# Convert Color values into simple colors
+def color(data):
+    x = str(data)
+    split = re.split('/| ', x)
+    return split[0]
+    
+animals['Color'] = animals.Color.apply(color)
+test['Color'] = test.Color.apply(color)
+
+
+# In[290]:
+
+animals.head()
+
+
+# In[291]:
+
+# Convert Name values to whether an animal has a name or not
+def hasName(data):
+    x = str(data)
+    if 'nan' in x:
+        return 'No Name'
+    else:
+        return 'Has Name'
+
+animals['Name'] = animals.Name.apply(hasName)
+test['Name'] = test.Name.apply(hasName)
+
+
+# In[292]:
+
+animals['Name'].value_counts()
+
+
+# In[293]:
+
+# Convert age in age in weeks
+def convert_AgeuponOutcome_to_weeks(df):
+    result = {}
+    for k in df['AgeuponOutcome'].unique():
+        if type(k) != type(""):
+            result[k] = -1
+        else:
+            v1, v2 = k.split()
+            if v2 in ["year", "years"]:
+                result[k] = int(v1) * 52
+            elif v2 in ["month", "months"]:
+                result[k] = int(v1) * 4.5
+            elif v2 in ["week", "weeks"]:
+                result[k] = int(v1)
+            elif v2 in ["day", "days"]:
+                result[k] = int(v1) / 7
+                
+    df['AgeuponOutcome'] = df['AgeuponOutcome'].map(result).astype(int)
+                
+    return df
+
+animals = convert_AgeuponOutcome_to_weeks(animals)
+test = convert_AgeuponOutcome_to_weeks(test)
+
+
+# In[294]:
+
+# Convert DateTime into five features Year,Month, Day, Hour, and Minute
+def fix_date_time(df):
+    def extract_field(_df, start, stop):
+        return _df['DateTime'].map(lambda dt: int(dt[start:stop]))
+    df['Year'] = extract_field(df,0,4)
+    df['Month'] = extract_field(df,5,7)
+    df['Day'] = extract_field(df,8,10)
+    df['Hour'] = extract_field(df,11,13)
+    df['Minute'] = extract_field(df,14,16)
+    
+    return df.drop(['DateTime'], axis = 1)
+
+animals = fix_date_time(animals)
+test = fix_date_time(test)
+
+
+# In[295]:
+
+animals.info()
+
+
+# In[296]:
+
+animals.head()
+
+
+# In[297]:
+
+test.head()
+
+
+# In[298]:
+
+animals.to_csv('files/cleanTrain.csv', index=False)
+test.to_csv('files/cleanTest.csv', index=False)
+
+
+# In[299]:
+
+current_palette = sns.color_palette("RdBu", n_colors=9)
+g = sns.factorplot(data=animals, x='OutcomeType', hue='AnimalType', kind='count', size=6, palette=current_palette)
+plt.subplots_adjust(top=.94)
+plt.xlabel('Outcome for Animal', fontsize=18)
+plt.ylabel('Number of Animals', fontsize=18)
+g.fig.suptitle('Outcome for Type of Animal', fontsize=20)
+g.savefig('images/outcome_animal.png')
+
+
+# In[300]:
+
+g = sns.factorplot(data=animals, x='OutcomeType', hue='Neutered', kind='count', size=6, palette='pastel')
+plt.subplots_adjust(top=.94)
+plt.xlabel('Outcome for Animal', fontsize=18)
+plt.ylabel('Number of Neutered Animals', fontsize=18)
+g.fig.suptitle('Outcome for Neutered Animals', fontsize=20)
+g.savefig('images/outcome_neutered.png')
+
+
+# In[301]:
+
+g = sns.factorplot(data=animals, x='AnimalType',hue='Breed', kind='count', size=6)
+plt.subplots_adjust(top=.94)
+plt.xlabel('Type of Animal', fontsize=18)
+plt.ylabel('Number of Breed Type', fontsize=18)
+g.fig.suptitle('Animal Breed Type', fontsize=20)
+g.savefig('images/animal_breed.png')
+
+
+# In[302]:
+
+g = sns.factorplot(data=animals, x='AnimalType', kind='count', palette='Set3', size=6)
+plt.subplots_adjust(top=.94)
+plt.xlabel('Type of Animal', fontsize=18)
+plt.ylabel('Number of Animals', fontsize=18)
+g.fig.suptitle('Number of Animals by Type', fontsize=20)
+g.savefig('images/animal_type.png')
+
